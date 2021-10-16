@@ -40,11 +40,11 @@ We also provide our implementation for experiment on toy data and image data for
 Please refer to corresponding subfolder for more information.
 
 ### Requirements
-pytorch >= 1.2.0
-seaborn == 0.9.0
-pandas
-sklearn
-Tensorboard (for visualization of toy data experiments, but optional)
+- pytorch >= 1.2.0
+- seaborn == 0.9.0
+- pandas
+- sklearn
+- Tensorboard (for visualization of toy data experiments, but optional)
 
 Specifically, we run our experiments with pytorch 1.6.0, CUDA 10.2, cuDNN 7.0, and we also test our code with pytorch 1.2.0 and 1.7.0 to ensure reproducibility.
 
