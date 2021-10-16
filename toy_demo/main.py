@@ -112,7 +112,7 @@ def main():
     G = Generator(D_in=args.z_dim, H=100, D_out=args.x_dim).to(device)
     g_opt = optim.Adam(G.parameters(), lr=2e-4)
 
-    if args.method =='ACT_withD':
+    if args.method =='CT_withD':
         D = Projector(D_in=args.x_dim, H=100, D_out=args.d_dim).to(device)
         d_opt = optim.Adam(D.parameters(), lr=2e-4)
         P = Projector(D_in=args.d_dim, H=100, D_out=args.p_dim).to(device)
