@@ -5,9 +5,10 @@ Other files: Experiments on 2d toy datasets
 
 ### Requirements
 - pytorch >= 1.2.0
-- seaborn
+- seaborn == 0.9.0
 - pandas
 - sklearn
+- Tensorboard (for visualization of toy data experiments, but optional)
 
 ### Example usage
 
