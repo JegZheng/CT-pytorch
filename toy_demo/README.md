@@ -12,9 +12,11 @@ Other files: Experiments on 2d toy datasets
 ### Example usage
 
 `$ python main.py --dataset 8gaussians --method CT`
+
 or run all methods on all toy datasets with
 
 `$ python main.py --run_all`
 
 Use --help for more options
+
 `$ python main.py --help`
