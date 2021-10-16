@@ -4,15 +4,16 @@
 Other files: Experiments on 2d toy datasets
 
 ### Requirements
-pytorch >= 1.2.0
-seaborn
-pandas
-sklearn
+- pytorch >= 1.2.0
+- seaborn
+- pandas
+- sklearn
 
 ### Example usage
 
 `$ python main.py --dataset 8gaussians --method CT`
 or run all methods on all toy datasets with
+
 `$ python main.py --run_all`
 
 Use --help for more options
