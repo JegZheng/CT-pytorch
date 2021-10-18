@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from training import *
 import seaborn as sns
 
-parser = argparse.ArgumentParser(description='IWAE with DReG')
+parser = argparse.ArgumentParser(description='Conditional transport experiment on toydata')
 # dataset options
 parser.add_argument('--batchsize', type=int, default=100, metavar='N',
                     help='input batch size for training (default: 200)')
@@ -36,7 +36,7 @@ parser.add_argument('--p_dim', type=int, default=1, metavar='N',
                     help='dimensionality of projected x (default: 1)')
 parser.add_argument('--d_dim', type=int, default=10, metavar='N',
                     help='dimensionality of feature x_feat (default: 20)')
-parser.add_argument('--learning-rate', type=float, default=0.0002,
+parser.add_argument('--learning-rate', type=float, default=2e-4,
                     help='learning rate for Adam')
 parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
 parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
@@ -65,8 +65,10 @@ class Generator(torch.nn.Module):
     def __init__(self, D_in, H, D_out):
         super(Generator, self).__init__()
         self.model = nn.Sequential(nn.Linear(D_in, H),
+                                   nn.BatchNorm1d(H),
                                    nn.LeakyReLU(),
                                    nn.Linear(H, H//2),
+                                   nn.BatchNorm1d(H//2),
                                    nn.LeakyReLU(),
                                    torch.nn.Linear(H//2, D_out)
                                   )
@@ -110,15 +112,15 @@ def main():
     writer = SummaryWriter(log_dir= os.path.join('runs', 'toy',  name))
 
     G = Generator(D_in=args.z_dim, H=100, D_out=args.x_dim).to(device)
-    g_opt = optim.Adam(G.parameters(), lr=2e-4)
+    g_opt = optim.Adam(G.parameters(), lr=args.learning_rate)
 
     if args.method =='CT_withD':
         D = Projector(D_in=args.x_dim, H=100, D_out=args.d_dim).to(device)
-        d_opt = optim.Adam(D.parameters(), lr=2e-4)
+        d_opt = optim.Adam(D.parameters(), lr=args.learning_rate)
         P = Projector(D_in=args.d_dim, H=100, D_out=args.p_dim).to(device)
     else:
         P = Projector(D_in=args.x_dim, H=100, D_out=args.p_dim).to(device)
-    p_opt = optim.Adam(P.parameters(), lr=2e-4)
+    p_opt = optim.Adam(P.parameters(), lr=args.learning_rate/5)
     z_fix = torch.randn(X_data.size(0), args.z_dim, requires_grad=False).to(device)
     
     p_stats = []
@@ -181,7 +183,7 @@ def main():
 
 if __name__ == '__main__':
     if args.run_all:
-        methods = ['CT', 'CT_withD', 'GAN', 'SWD', 'WGANGP']
+        methods = ['CT', 'CT_withD', 'GAN', 'WGANGP', 'SWD']
         datasets = ['swiss_roll', 'half_moons', '8gaussians', '25gaussians']
         for method in methods:
             for dataset in datasets:
