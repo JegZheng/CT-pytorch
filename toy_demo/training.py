@@ -16,9 +16,6 @@ def train_ct(args, epoch, G, P, g_opt, p_opt, dataloader, device, writer):
         z = torch.randn(N, args.z_dim).to(device)
         xpred = G(z)
         
-        X_ = X.repeat(N,1,1).transpose(0,1)
-        xpred_ = xpred.repeat(N,1,1)
-        
         diff = (X[:,None]-xpred).pow(2) #pairwise mse for navigator network: B x B x h 
         cost = diff.sum(-1) #pairwise cost: B x B
         tmp = P(diff).squeeze() # navigator distance: B x B
@@ -139,10 +136,9 @@ def train_GAN(args, epoch, G, D, g_opt, d_opt, d_criterion, dataloader, device, 
         dloss_fake = d_criterion(xpred_1d, torch.zeros_like(xpred_1d))
         dloss_true = d_criterion(x_1d, torch.ones_like(x_1d))
         dloss = dloss_fake + dloss_true
-        if epoch <= 5000:
-            d_opt.zero_grad()
-            dloss.backward()
-            d_opt.step()
+        d_opt.zero_grad()
+        dloss.backward()
+        d_opt.step()
 
         d_loss += dloss.item()
         n_iter = epoch * len(dataloader) + i
