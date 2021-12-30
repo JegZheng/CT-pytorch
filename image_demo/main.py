@@ -79,6 +79,15 @@ def train(epoch):
                 disc_loss = nn.ReLU()(1.0 - discriminator(data)).mean() + nn.ReLU()(1.0 + discriminator(generator(z))).mean()
             elif args.loss == 'wasserstein':
                 disc_loss = -discriminator(data).mean() + discriminator(generator(z)).mean()
+            elif args.loss == 'ct':
+                feat = discriminator(generator(z))
+                feat_x = discriminator(data)
+                mse_n = (feat_x[:,None] - feat).pow(2)
+                cost = mse_n.sum(-1)
+                d = navigator(mse_n).squeeze().mul(-1)
+                m_forward = torch.softmax(d, dim=1)
+                m_backward = torch.softmax(d, dim=0)
+                disc_loss = - args.rho * (cost * m_forward).sum(1).mean() - (1-args.rho) * (cost * m_backward).sum(0).mean()
             else:
                 disc_loss = nn.BCEWithLogitsLoss()(discriminator(data), Variable(torch.ones(args.batch_size, 1).cuda())) + \
                     nn.BCEWithLogitsLoss()(discriminator(generator(z)), Variable(torch.zeros(args.batch_size, 1).cuda()))
