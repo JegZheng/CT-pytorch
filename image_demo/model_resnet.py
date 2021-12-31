@@ -1,4 +1,5 @@
 # ResNet generator and discriminator
+import torch
 from torch import nn
 import torch.nn.functional as F
 
@@ -136,8 +137,9 @@ class Generator(nn.Module):
         return self.model(self.dense(z).view(-1, GEN_SIZE, 4, 4))
 
 class Discriminator(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim, loss_type='ct'):
         super(Discriminator, self).__init__()
+        self.loss_type = loss_type
 
         self.model = nn.Sequential(
                 FirstResBlockDiscriminator(channels, DISC_SIZE, stride=2),
@@ -152,4 +154,9 @@ class Discriminator(nn.Module):
         self.fc = SpectralNorm(self.fc)
 
     def forward(self, x):
-        return self.fc(self.model(x).view(-1,DISC_SIZE))
+        x = self.model(x).view(-1,DISC_SIZE)
+        x = self.fc(x)
+
+        if self.loss_type == 'ct':
+            x = x/torch.sqrt(torch.sum(x.square(), dim=-1, keepdim=True))
+        return x

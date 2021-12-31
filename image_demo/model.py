@@ -1,4 +1,6 @@
 # DCGAN-like generator and discriminator
+import torch
+import numpy as np
 from torch import nn
 import torch.nn.functional as F
 
@@ -33,8 +35,9 @@ class Generator(nn.Module):
         return self.model(z.view(-1, self.z_dim, 1, 1))
 
 class Discriminator(nn.Module):
-    def __init__(self,dim=1):
+    def __init__(self,dim=256, loss_type='ct'):
         super(Discriminator, self).__init__()
+        self.loss_type = loss_type
 
         self.conv1 = SpectralNorm(nn.Conv2d(channels, 64, 3, stride=1, padding=(1,1)))
 
@@ -49,6 +52,7 @@ class Discriminator(nn.Module):
         self.fc = SpectralNorm(nn.Linear(w_g * w_g * 512, dim))
 
     def forward(self, x):
+        bs = x.shape[0]
         m = x
         m = nn.LeakyReLU(leak)(self.conv1(m))
         m = nn.LeakyReLU(leak)(self.conv2(m))
@@ -57,6 +61,27 @@ class Discriminator(nn.Module):
         m = nn.LeakyReLU(leak)(self.conv5(m))
         m = nn.LeakyReLU(leak)(self.conv6(m))
         m = nn.LeakyReLU(leak)(self.conv7(m))
+        m = m.view(bs, -1)
+        m = self.fc(m)
+        if self.loss_type == 'ct':
+            m = m/torch.sqrt(torch.sum(m.square(), dim=-1, keepdim=True))
+        return m
 
-        return self.fc(m.view(-1,w_g * w_g * 512))
+class Navigator(nn.Module):
+    def __init__(self, hidden=512,dim=256):
+        super(Navigator, self).__init__()
 
+        self.fc1 = nn.Linear(dim, hidden)
+        self.fc2 = nn.Linear(hidden, hidden // 2)
+        self.fc3 = nn.Linear(hidden // 2, 1)
+        self.act = nn.LeakyReLU()
+        self.norm1 = nn.BatchNorm1d(hidden)
+        self.norm2 = nn.BatchNorm1d(hidden//2)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.fc2(x)
+        x = self.act(x)
+        
+        return self.fc3(x)

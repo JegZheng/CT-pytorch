@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 from torchvision import datasets, transforms
-from torch.autograd import Variable
 import model_resnet
 import model
 
@@ -18,9 +17,11 @@ import os
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--epochs', type=int, default=200)
-parser.add_argument('--dim', type=int, default=1)
+parser.add_argument('--batch_size', type=int, default=256)
+parser.add_argument('--disc_iters', type=int, default=1)
+parser.add_argument('--gen_iters', type=int, default=5)
+parser.add_argument('--epochs', type=int, default=5000)
+parser.add_argument('--dim', type=int, default=256)
 parser.add_argument('--lr', type=float, default=2e-4)
 parser.add_argument('--rho', type=float, default=0.5)
 parser.add_argument('--loss', type=str, default='hinge')
@@ -37,24 +38,25 @@ loader = torch.utils.data.DataLoader(
         transform=transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])),
-        batch_size=args.batch_size, shuffle=True, num_workers=1, pin_memory=True)
+        batch_size=args.batch_size, shuffle=True, num_workers=8)
 
 Z_dim = 128
-#number of updates to discriminator for every update to generator 
-disc_iters = 5
 
 # discriminator = torch.nn.DataParallel(Discriminator()).cuda() # TODO: try out multi-gpu training
 if args.model == 'resnet':
-    discriminator = model_resnet.Discriminator(args.dim).cuda()
+    discriminator = model_resnet.Discriminator(args.dim, loss_type=args.loss).cuda()
+    discriminator = torch.nn.DataParallel(discriminator)
     generator = model_resnet.Generator(Z_dim).cuda()
+    generator = torch.nn.DataParallel(generator)
 else:
-    discriminator = model.Discriminator(args.dim).cuda()
+    discriminator = model.Discriminator(args.dim, loss_type=args.loss).cuda()
+    discriminator = torch.nn.DataParallel(discriminator)
     generator = model.Generator(Z_dim).cuda()
-navigator = nn.Linear(args.dim, 1).cuda()
-
+    generator = torch.nn.DataParallel(generator)
+navigator = model.Navigator(dim=args.dim).cuda()
+navigator = torch.nn.DataParallel(navigator)
 # because the spectral normalization module creates parameters that don't require gradients (u and v), we don't want to 
 # optimize these using sgd. We only let the optimizer operate on parameters that _do_ require gradients
-# TODO: replace Parameters with buffers, which aren't returned from .parameters() method.
 optim_disc = optim.Adam(filter(lambda p: p.requires_grad, discriminator.parameters()), lr=args.lr, betas=(0.0,0.9))
 optim_gen  = optim.Adam(generator.parameters(), lr=args.lr, betas=(0.0,0.9))
 optim_nav  = optim.Adam(navigator.parameters(), lr=args.lr, betas=(0.0,0.9))
@@ -68,11 +70,11 @@ def train(epoch):
     for batch_idx, (data, target) in enumerate(loader):
         if data.size()[0] != args.batch_size:
             continue
-        data, target = Variable(data.cuda()), Variable(target.cuda())
+        data, target = (data.cuda()), (target.cuda())
 
         # update discriminator
-        for _ in range(disc_iters):
-            z = Variable(torch.randn(args.batch_size, Z_dim).cuda())
+        for _ in range(args.disc_iters):
+            z = (torch.randn(args.batch_size, Z_dim).cuda())
             optim_disc.zero_grad()
             optim_gen.zero_grad()
             if args.loss == 'hinge':
@@ -89,34 +91,34 @@ def train(epoch):
                 m_backward = torch.softmax(d, dim=0)
                 disc_loss = - args.rho * (cost * m_forward).sum(1).mean() - (1-args.rho) * (cost * m_backward).sum(0).mean()
             else:
-                disc_loss = nn.BCEWithLogitsLoss()(discriminator(data), Variable(torch.ones(args.batch_size, 1).cuda())) + \
-                    nn.BCEWithLogitsLoss()(discriminator(generator(z)), Variable(torch.zeros(args.batch_size, 1).cuda()))
+                disc_loss = nn.BCEWithLogitsLoss()(discriminator(data), (torch.ones(args.batch_size, 1).cuda())) + \
+                    nn.BCEWithLogitsLoss()(discriminator(generator(z)), (torch.zeros(args.batch_size, 1).cuda()))
             disc_loss.backward()
             optim_disc.step()
 
-        z = Variable(torch.randn(args.batch_size, Z_dim).cuda())
-
         # update generator
-        optim_disc.zero_grad()
-        optim_gen.zero_grad()
-        if args.loss == 'hinge' or args.loss == 'wasserstein':
-            gen_loss = -discriminator(generator(z)).mean()
-        elif args.loss == 'ct':
-            optim_nav.zero_grad()
-            feat = discriminator(generator(z))
-            feat_x = discriminator(data)
-            mse_n = (feat_x[:,None] - feat).pow(2)
-            cost = mse_n.sum(-1)
-            d = navigator(mse_n).squeeze().mul(-1)
-            m_forward = torch.softmax(d, dim=1)
-            m_backward = torch.softmax(d, dim=0)
-            gen_loss = args.rho * (cost * m_forward).sum(1).mean() + (1-args.rho) * (cost * m_backward).sum(0).mean()
-        else:
-            gen_loss = nn.BCEWithLogitsLoss()(discriminator(generator(z)), Variable(torch.ones(args.batch_size, 1).cuda()))
-        gen_loss.backward()
-        if args.loss == 'ct':
-            optim_nav.step()
-        optim_gen.step()
+        for _ in range(args.gen_iters):
+            z = (torch.randn(args.batch_size, Z_dim).cuda())
+            optim_disc.zero_grad()
+            optim_gen.zero_grad()
+            if args.loss == 'hinge' or args.loss == 'wasserstein':
+                gen_loss = -discriminator(generator(z)).mean()
+            elif args.loss == 'ct':
+                optim_nav.zero_grad()
+                feat = discriminator(generator(z))
+                feat_x = discriminator(data)
+                mse_n = (feat_x[:,None] - feat).pow(2)
+                cost = mse_n.sum(-1)
+                d = navigator(mse_n).squeeze().mul(-1)
+                m_forward = torch.softmax(d, dim=1)
+                m_backward = torch.softmax(d, dim=0)
+                gen_loss = args.rho * (cost * m_forward).sum(1).mean() + (1-args.rho) * (cost * m_backward).sum(0).mean()
+            else:
+                gen_loss = nn.BCEWithLogitsLoss()(discriminator(generator(z)), (torch.ones(args.batch_size, 1).cuda()))
+            gen_loss.backward()
+            if args.loss == 'ct':
+                optim_nav.step()
+            optim_gen.step()
 
         if batch_idx % 100 == 0:
             print(f"Epoch {epoch}/{args.epochs}\tIt {batch_idx}/{len(loader)}\t" + 'disc loss', disc_loss.item(), 'gen loss', gen_loss.item())
@@ -125,7 +127,7 @@ def train(epoch):
     scheduler_g.step()
     scheduler_n.step()
 
-fixed_z = Variable(torch.randn(args.batch_size, Z_dim).cuda())
+fixed_z = (torch.randn(args.batch_size, Z_dim).cuda())
 def evaluate(epoch):
 
     samples = generator(fixed_z).cpu().data.numpy()[:64]
