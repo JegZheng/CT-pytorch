@@ -19,7 +19,7 @@ import seaborn as sns
 parser = argparse.ArgumentParser(description='Conditional transport experiment on toydata')
 # dataset options
 parser.add_argument('--batchsize', type=int, default=100, metavar='N',
-                    help='input batch size for training (default: 200)')
+                    help='input batch size for training (default: 100)')
 parser.add_argument('--dataset', type=str, default="swiss_roll", metavar='D',
                     help='Dataset: swiss_roll|half_moons|circle|s_curve|2gaussians|8gaussians|25gaussians')
 parser.add_argument('--toysize', type=int, default=2000, metavar='N',
@@ -35,7 +35,7 @@ parser.add_argument('--x_dim', type=int, default=2, metavar='N',
                     help='dimensionality of x (default: 2)')
 parser.add_argument('--p_dim', type=int, default=1, metavar='N',
                     help='dimensionality of projected x (default: 1)')
-parser.add_argument('--d_dim', type=int, default=10, metavar='N',
+parser.add_argument('--d_dim', type=int, default=20, metavar='N',
                     help='dimensionality of feature x_feat (default: 20)')
 parser.add_argument('--learning-rate', type=float, default=2e-4,
                     help='learning rate for Adam')
