@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 matplotlib.style.use('ggplot')
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as data_utils
 import os
@@ -47,6 +48,7 @@ parser.add_argument('--run_all', action='store_true', default=False, help='activ
 # CT options
 parser.add_argument('--rho', type=float, default=0.5,
                     help='balance coefficient for forward-backward (default: 0.5)')
+parser.add_argument('--use_cos_distance', action='store_true', default=False, help='activate to use cosine distance as feature cost')
 
 # SWD options
 parser.add_argument('--n_projections', type=int, default=1000, metavar='N',
@@ -80,7 +82,7 @@ class Generator(torch.nn.Module):
 
 # Navigator/Discriminator/Feature encoder for CT, GAN and WGAN
 class Projector(torch.nn.Module):
-    def __init__(self, D_in, H, D_out=1):
+    def __init__(self, D_in, H, D_out=1, use_cos_distance=False):
         super(Projector, self).__init__()
         self.model = nn.Sequential(nn.Linear(D_in, H),
                                    nn.LeakyReLU(),
@@ -88,9 +90,12 @@ class Projector(torch.nn.Module):
                                    nn.LeakyReLU(),
                                    nn.Linear(H//2, D_out)
                                   )
+        self.use_cos_distance=use_cos_distance
 
     def forward(self, x):
         logit = self.model(x)
+        if self.use_cos_distance:
+            logit = F.normalize(logit, p=2, dim=-1)
         return logit
 
 
@@ -115,7 +120,7 @@ def main():
     g_opt = optim.Adam(G.parameters(), lr=args.learning_rate)
 
     if args.method =='CT_withD':
-        D = Projector(D_in=args.x_dim, H=100, D_out=args.d_dim).to(device)
+        D = Projector(D_in=args.x_dim, H=100, D_out=args.d_dim, use_cos_distance=args.use_cos_distance).to(device)
         d_opt = optim.Adam(D.parameters(), lr=args.learning_rate)
         P = Projector(D_in=args.d_dim, H=100, D_out=args.p_dim).to(device)
     else:
